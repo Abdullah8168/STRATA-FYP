@@ -1,5 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:provider/provider.dart';
+
+import '../core/constants/app_routes.dart';
+import '../providers/app_provider.dart';
+import '../services/deep_link_service.dart';
 import '../theme/app_theme.dart';
 
 class SplashScreen extends StatefulWidget {
@@ -29,9 +34,21 @@ class _SplashScreenState extends State<SplashScreen>
       CurvedAnimation(parent: _controller, curve: Curves.easeOutBack),
     );
     _controller.forward();
-    Future.delayed(const Duration(milliseconds: 2500), () {
-      if (mounted) context.go('/role');
-    });
+    Future.microtask(_boot);
+  }
+
+  Future<void> _boot() async {
+    await Future<void>.delayed(const Duration(milliseconds: 900));
+    if (!mounted) return;
+    final provider = context.read<AppProvider>();
+    final cold = DeepLinkService.instance.consumePendingColdStart();
+    if (cold != null) {
+      provider.applyOnboardingDeepLink(cold);
+    }
+    await provider.initWallet();
+    if (!mounted) return;
+    final next = provider.takePendingBootRoute() ?? AppRoutes.roleSelection;
+    if (mounted) context.go(next);
   }
 
   @override

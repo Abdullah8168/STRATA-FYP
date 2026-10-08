@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 import '../../theme/app_theme.dart';
 import '../../providers/app_provider.dart';
 
@@ -40,7 +41,7 @@ class _TempAccessKeyScreenState extends State<TempAccessKeyScreen>
     super.dispose();
   }
 
-  void _copyKey(String key) async {
+  Future<void> _copyKey(String key) async {
     await Clipboard.setData(ClipboardData(text: key));
     setState(() => _copied = true);
     Future.delayed(const Duration(seconds: 2), () {
@@ -51,7 +52,7 @@ class _TempAccessKeyScreenState extends State<TempAccessKeyScreen>
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<AppProvider>();
-    final key = provider.sessionKey.isEmpty ? 'STRATA-0000-A7F3-B2D9' : provider.sessionKey;
+    final key = provider.sessionKey.isEmpty ? '—' : provider.sessionKey;
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -98,7 +99,7 @@ class _TempAccessKeyScreenState extends State<TempAccessKeyScreen>
               ),
               const SizedBox(height: 8),
               const Text(
-                'Share this key with your guest to grant network access.',
+                'Share this key with your guest. It is also sent to the host node as metadata when the guest starts a paid session (display-only if the Pi ignores it).',
                 style: TextStyle(color: AppColors.textSecondary, fontSize: 14),
                 textAlign: TextAlign.center,
               ),
@@ -137,51 +138,19 @@ class _TempAccessKeyScreenState extends State<TempAccessKeyScreen>
                 ),
               ),
               const SizedBox(height: 20),
-              // QR code placeholder
-              Container(
-                width: 180,
-                height: 180,
-                decoration: BoxDecoration(
-                  color: AppColors.card,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: AppColors.primary, width: 2),
+              if (key != '—')
+                QrImageView(
+                  data: key,
+                  version: QrVersions.auto,
+                  size: 200.0,
+                  backgroundColor: AppColors.card,
                 ),
-                child: CustomPaint(
-                  painter: _QRPainter(),
-                  child: const Center(
-                    child: Icon(Icons.qr_code_2, color: AppColors.primary, size: 100),
-                  ),
-                ),
-              ),
               const SizedBox(height: 12),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                decoration: BoxDecoration(
-                  color: AppColors.surface,
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: const Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.timer_outlined, color: AppColors.accent, size: 16),
-                    SizedBox(width: 6),
-                    Text(
-                      'Expires in 09:47',
-                      style: TextStyle(
-                        color: AppColors.accent,
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 32),
               Row(
                 children: [
                   Expanded(
                     child: OutlinedButton.icon(
-                      onPressed: () => _copyKey(key),
+                      onPressed: key == '—' ? null : () => _copyKey(key),
                       icon: Icon(
                         _copied ? Icons.check : Icons.copy_outlined,
                         size: 18,
@@ -192,7 +161,16 @@ class _TempAccessKeyScreenState extends State<TempAccessKeyScreen>
                   const SizedBox(width: 12),
                   Expanded(
                     child: ElevatedButton.icon(
-                      onPressed: () {},
+                      onPressed: key == '—'
+                          ? null
+                          : () async {
+                              await Clipboard.setData(ClipboardData(text: key));
+                              if (!context.mounted) return;
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                    content: Text('Access key copied.')),
+                              );
+                            },
                       icon: const Icon(Icons.share_outlined, size: 18),
                       label: const Text('Share'),
                     ),
@@ -213,24 +191,4 @@ class _TempAccessKeyScreenState extends State<TempAccessKeyScreen>
       ),
     );
   }
-}
-
-class _QRPainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = AppColors.primary.withAlpha(30)
-      ..style = PaintingStyle.fill;
-    const cell = 10.0;
-    for (double x = 0; x < size.width; x += cell * 2) {
-      for (double y = 0; y < size.height; y += cell * 2) {
-        if ((x + y).toInt() % 4 == 0) {
-          canvas.drawRect(Rect.fromLTWH(x, y, cell, cell), paint);
-        }
-      }
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }

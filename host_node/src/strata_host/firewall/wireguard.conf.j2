@@ -1,0 +1,15 @@
+[Interface]
+PrivateKey = {{ private_key }}
+Address = {{ address }}
+ListenPort = {{ listen_port }}
+# Routes are managed by strata_host.firewall.wg_routing so that only guest
+# traffic uses the tunnel; the Pi's own traffic stays on the WAN.
+Table = off
+
+{% if peer_pubkey %}
+[Peer]
+PublicKey = {{ peer_pubkey }}
+Endpoint = {{ peer_endpoint }}
+AllowedIPs = {{ peer_allowed_ips }}
+PersistentKeepalive = 25
+{% endif %}

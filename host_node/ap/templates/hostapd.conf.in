@@ -1,0 +1,27 @@
+# STRATA hostapd template — Iteration 1 wireless AP
+# Rendered by scripts/render_config.sh from host_node/ap/.env
+# Tokens use double-underscore names (see scripts/lib.sh).
+
+interface=__AP_IFACE__
+driver=nl80211
+ssid=__SSID__
+country_code=__COUNTRY_CODE__
+hw_mode=__HW_MODE__
+channel=__CHANNEL__
+ieee80211n=1
+wmm_enabled=1
+
+# Ignore broadcast SSIDs from clients trying to create their own IBSS.
+ignore_broadcast_ssid=0
+
+# WPA2-Personal (WPA-PSK). Suitable for a lab STRATA SSID.
+# Do not commit a real passphrase; it is injected at render time.
+auth_algs=1
+wpa=2
+wpa_passphrase=__WPA_PASSPHRASE__
+wpa_key_mgmt=WPA-PSK
+rsn_pairwise=CCMP
+
+# Log to syslog; keep hostapd quiet enough for demos.
+logger_syslog=-1
+logger_syslog_level=2

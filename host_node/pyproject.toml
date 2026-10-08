@@ -1,0 +1,57 @@
+[build-system]
+requires = ["hatchling>=1.25.0"]
+build-backend = "hatchling.build"
+
+[project]
+name = "strata-host"
+version = "0.1.0"
+description = "STRATA host node skeleton service"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+  "fastapi>=0.115.0",
+  "uvicorn[standard]>=0.30.0",
+  "pydantic>=2.8.0",
+  "pydantic-settings>=2.4.0",
+  "python-jose[cryptography]>=3.3.0",
+  "structlog>=24.2.0",
+  # Phase E — on-chain listener.
+  "web3>=6.20.0",
+  "websockets>=12.0",
+  "eth-account>=0.13.0",
+  # Phase F — nft + wireguard config rendering.
+  "jinja2>=3.1.4",
+  # Phase G — mDNS service discovery (host node advertises itself).
+  "zeroconf>=0.131.0",
+  # Captive portal landing page — QR for strata:// deep link.
+  "qrcode>=7.4.0",
+  # Optional SQLite session persistence (Pi reboot).
+  "aiosqlite>=0.20.0",
+]
+
+[project.scripts]
+strata-host = "strata_host.main:run"
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.3.0",
+  "pytest-asyncio>=0.23.8",
+  "pytest-mock>=3.14.0",
+  "httpx>=0.27.0",
+  "ruff>=0.6.0",
+  "mypy>=1.11.0",
+  "eth-tester[py-evm]>=0.12.0b2",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/strata_host"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+# Prefer this checkout's src/ over a stale editable install from another path.
+pythonpath = ["src"]
+markers = [
+  "integration: requires Linux + root + nft + iperf3; auto-skipped otherwise",
+  "e2e: end-to-end pay-and-connect test; opt-in via -m e2e (needs hardhat + host_node + fake guest)",
+]

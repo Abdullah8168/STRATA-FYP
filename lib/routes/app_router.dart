@@ -16,6 +16,7 @@ import '../screens/guest/payment_screen.dart';
 import '../screens/guest/guest_dashboard_screen.dart';
 import '../screens/guest/access_revoked_screen.dart';
 import '../screens/chatroom/chatroom_screen.dart';
+import '../screens/guest/settings_screen.dart';
 
 final GoRouter appRouter = GoRouter(
   initialLocation: '/splash',
@@ -39,7 +40,16 @@ final GoRouter appRouter = GoRouter(
       path: '/otp/:role',
       builder: (context, state) {
         final role = state.pathParameters['role'] ?? 'guest';
-        final contact = state.uri.queryParameters['contact'] ?? '';
+        var contact = state.uri.queryParameters['contact'] ?? '';
+        if (contact.isEmpty) {
+          final extra = state.extra;
+          if (extra is Map) {
+            final maybeContact = extra['contact'];
+            if (maybeContact is String) {
+              contact = maybeContact;
+            }
+          }
+        }
         return OtpScreen(role: role, contact: contact);
       },
     ),
@@ -86,6 +96,10 @@ final GoRouter appRouter = GoRouter(
     GoRoute(
       path: '/guest/dashboard',
       builder: (context, state) => const GuestDashboardScreen(),
+    ),
+    GoRoute(
+      path: '/guest/settings',
+      builder: (context, state) => const GuestSettingsScreen(),
     ),
     GoRoute(
       path: '/guest/revoked',

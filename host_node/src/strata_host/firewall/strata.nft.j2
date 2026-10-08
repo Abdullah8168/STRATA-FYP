@@ -1,0 +1,193 @@
+#
+# STRATA nftables ruleset (Phases B + F)
+#
+# Render with strata_host.firewall.nft_renderer.render_ruleset(settings).
+# Apply with: nft -f - <<< "$(rendered)"
+#
+# Variables:
+#   guest_iface      AP interface guests are connected to (e.g. wlan0)
+#   wan_iface        Uplink interface to the ISP (e.g. eth0)
+#   portal_port      Captive portal HTTP port (default 8080)
+#   ssh_port         Host SSH port for management (default 22)
+#   wg_enabled       True iff WireGuard exit tunnel is up
+#   wg_iface         WireGuard interface name (kept "wg0" by convention)
+#   guest_wan_egress True when authed guests may leave via wan_iface
+#                    (WG off, or WG_FALLBACK_TO_WAN=true)
+#   guest_egress_ifaces  nft set literal of allowed guest egress ifaces
+#
+
+flush ruleset
+
+table inet strata {
+    #
+    # Sets + meters
+    #
+    # Authenticated guest MACs. Populated by EnforcerService.admit() and
+    # cleared by .disconnect(). Empty sets mean nobody is admitted yet.
+    set strata_authed {
+        type ether_addr
+        flags timeout
+    }
+
+    # RFC1918 / link-local destinations a guest must NEVER reach. Used by
+    # the forward chain to enforce LAN isolation.
+    set strata_lan_v4 {
+        type ipv4_addr
+        flags interval
+        elements = { 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 169.254.0.0/16 }
+    }
+
+    set strata_lan_v6 {
+        type ipv6_addr
+        flags interval
+        elements = { fc00::/7, fe80::/10 }
+    }
+
+    # Per-guest rate limiters: one 50 Mbit/s bucket per guest and direction
+    # (see "limit rate over 6250 kbytes/second" in the forward chain).
+    # Dynamic sets (not standalone `meter` blocks, which nft rejects): the
+    # forward chain's `update @set { ... limit ... }` adds a bucket per
+    # guest, expiring after 30 s of silence. Size 1024 is comfortably above
+    # any realistic guest count.
+    set strata_pmac {
+        type ether_addr
+        size 1024
+        flags dynamic,timeout
+        timeout 30s
+    }
+
+    set strata_pdown {
+        type ipv4_addr
+        size 1024
+        flags dynamic,timeout
+        timeout 30s
+    }
+
+    #
+    # NAT — captive portal redirect
+    #
+    chain prerouting {
+        type nat hook prerouting priority dstnat; policy accept;
+
+        # Phase B: unauthed guests trying HTTP get DNATed to the local captive
+        # portal. HTTPS is not redirected — sending 443 to plain HTTP causes a
+        # certificate error. Authed guests skip the redirect.
+        iifname "{{ guest_iface }}" ether saddr @strata_authed return
+        iifname "{{ guest_iface }}" tcp dport { 80 } redirect to :{{ portal_port }}
+    }
+
+    chain postrouting {
+        type nat hook postrouting priority srcnat; policy accept;
+
+        {% if wg_enabled %}
+        # WireGuard egress. Policy routing (strata_host.firewall.wg_routing)
+        # sends guest-sourced packets to wg0, so authed guest traffic exits
+        # through the team VPS and the residential IP stays hidden.
+        iifname "{{ guest_iface }}" oifname "{{ wg_iface }}" ether saddr @strata_authed masquerade
+        {% endif %}
+
+        {% if guest_wan_egress %}
+        # WAN egress for guests: the normal path without WireGuard, or the
+        # fallback when WG_FALLBACK_TO_WAN=true and the tunnel is down.
+        iifname "{{ guest_iface }}" oifname "{{ wan_iface }}" ether saddr @strata_authed masquerade
+        {% endif %}
+    }
+
+    #
+    # Filter — input (host-bound traffic)
+    #
+    chain input {
+        type filter hook input priority filter; policy drop;
+
+        iif lo accept
+        ct state invalid drop
+        ct state { established, related } accept
+
+        # DHCP — guests need a lease.
+        iifname "{{ guest_iface }}" udp sport 68 udp dport 67 accept
+
+        # DNS — let guests resolve through the host's resolver.
+        iifname "{{ guest_iface }}" udp dport 53 accept
+        iifname "{{ guest_iface }}" tcp dport 53 accept
+
+        # Captive portal HTTP — both unauthed (DNATed) and authed traffic
+        # lands here. The portal itself is responsible for authn.
+        iifname "{{ guest_iface }}" tcp dport {{ portal_port }} accept
+
+        # mDNS — the app finds the host node by querying _strata._tcp
+        # before the guest has paid, so queries must reach the advertiser.
+        iifname "{{ guest_iface }}" udp dport 5353 accept
+
+        # Management SSH on the WAN side. Restrict by source IP in
+        # production; we accept any here so a brand-new Pi is reachable.
+        iifname "{{ wan_iface }}" tcp dport {{ ssh_port }} accept
+
+        # ICMP — useful for troubleshooting but rate-limit to defeat
+        # CPU-pinning floods (Phase F hardening).
+        icmp type echo-request limit rate 20/second accept
+        icmpv6 type echo-request limit rate 20/second accept
+        icmp type echo-request drop
+        icmpv6 type echo-request drop
+
+        # Other ICMP messages we want for path-MTU discovery, etc.
+        icmp type { destination-unreachable, time-exceeded, parameter-problem } accept
+        icmpv6 type { destination-unreachable, packet-too-big, time-exceeded, parameter-problem,
+                      nd-router-solicit, nd-router-advert, nd-neighbor-solicit, nd-neighbor-advert } accept
+    }
+
+    #
+    # Filter — forward (guest → internet, plus WAN → guest drops)
+    #
+    chain forward {
+        type filter hook forward priority filter; policy drop;
+
+        # Phase F: drop bad/invalid state early so a malformed packet
+        # can't burn cycles in the rest of the chain.
+        ct state invalid drop
+
+        # Everything below runs BEFORE the established fast-path, otherwise
+        # it would only ever see a connection's first packet.
+        #
+        # A guest who is not (or no longer) admitted gets nothing forwarded
+        # — including connections opened while they were admitted, so a
+        # quota cut-off also stops a download that is already running.
+        iifname "{{ guest_iface }}" ether saddr != @strata_authed counter drop
+
+        # Per-guest 50 Mbit/s caps (6250 kbytes/second), each direction.
+        # "over" matches only the excess, which is dropped. Upload is keyed
+        # by the guest's MAC; for download the destination MAC isn't known
+        # yet in the forward hook, so it is keyed by the guest's IP.
+        iifname "{{ guest_iface }}" \
+            update @strata_pmac { ether saddr limit rate over 6250 kbytes/second } \
+            counter drop
+        oifname "{{ guest_iface }}" \
+            update @strata_pdown { ip daddr limit rate over 6250 kbytes/second } \
+            counter drop
+
+        # Established / related: fast-path through.
+        ct state { established, related } accept
+
+        # Hard isolation: even authenticated guests CANNOT reach the host
+        # LAN. This rule runs BEFORE the authed-accept path so a guest
+        # who knows our subnet can't pivot.
+        iifname "{{ guest_iface }}" ip  daddr @strata_lan_v4 counter drop
+        iifname "{{ guest_iface }}" ip6 daddr @strata_lan_v6 counter drop
+
+        {% if wg_enabled %}
+        # The tunnel MTU (1420) is smaller than the AP's (1500); clamp the
+        # MSS on SYNs into wg0 so guest TCP doesn't stall on large packets.
+        oifname "{{ wg_iface }}" tcp flags syn tcp option maxseg size set rt mtu
+        {% endif %}
+
+        # Authenticated egress. With WireGuard on and no fallback this is
+        # wg0 only — the kill switch: a guest packet routed to the WAN
+        # (tunnel down) hits the chain's drop policy instead of leaking.
+        iifname "{{ guest_iface }}" ether saddr @strata_authed \
+            oifname {{ guest_egress_ifaces }} \
+            counter accept
+
+        # Defense in depth: reject WAN-initiated new flows explicitly so
+        # the counter is visible. Established flows already accepted above.
+        iifname "{{ wan_iface }}" ct state new counter drop
+    }
+}

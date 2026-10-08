@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
 import '../theme/app_theme.dart';
 import '../providers/app_provider.dart';
+import '../services/session_history_service.dart';
 
 class Sidebar extends StatelessWidget {
   final String role;
@@ -33,20 +34,27 @@ class Sidebar extends StatelessWidget {
                   context,
                   icon: Icons.dashboard_outlined,
                   label: 'Dashboard',
-                  route: role == 'host' ? '/host/dashboard' : '/guest/dashboard',
+                  route:
+                      role == 'host' ? '/host/dashboard' : '/guest/dashboard',
                 ),
                 if (role == 'host') ...[
                   _buildNavItem(
                     context,
                     icon: Icons.router_outlined,
                     label: 'My Hosting',
-                    route: '/host/dashboard',
+                    route: '/host/my-hosting',
                   ),
                   _buildNavItem(
                     context,
                     icon: Icons.account_balance_wallet_outlined,
                     label: 'Earnings',
-                    route: '/host/dashboard',
+                    route: '/host/earnings',
+                  ),
+                  _buildNavItem(
+                    context,
+                    icon: Icons.account_balance_wallet_outlined,
+                    label: 'Wallet',
+                    route: '/wallet',
                   ),
                 ] else ...[
                   _buildNavItem(
@@ -57,9 +65,15 @@ class Sidebar extends StatelessWidget {
                   ),
                   _buildNavItem(
                     context,
+                    icon: Icons.account_balance_wallet_outlined,
+                    label: 'Wallet',
+                    route: '/wallet',
+                  ),
+                  _buildNavItem(
+                    context,
                     icon: Icons.history_outlined,
                     label: 'Sessions',
-                    route: '/guest/dashboard',
+                    route: '/guest/sessions',
                   ),
                 ],
                 _buildNavItem(
@@ -72,13 +86,24 @@ class Sidebar extends StatelessWidget {
                   context,
                   icon: Icons.settings_outlined,
                   label: 'Settings',
-                  route: role == 'host' ? '/host/dashboard' : '/guest/dashboard',
+                  route: role == 'host' ? '/profile' : '/guest/settings',
                 ),
                 const SizedBox(height: 16),
                 _buildNavSection(context, 'RECENT SESSIONS'),
-                _buildRecentItem(context, 'Campus Node 3', '10 GB · 2h ago'),
-                _buildRecentItem(context, "Ahmad's Node", '5 GB · Yesterday'),
-                _buildRecentItem(context, "Sara's Hub", '2 GB · 2d ago'),
+                if (role == 'guest')
+                  _RecentSessionsList()
+                else
+                  Padding(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 16.0, vertical: 8),
+                    child: Text(
+                      'Session history appears in the desktop host console.',
+                      style: TextStyle(
+                        color: AppColors.textSecondary.withAlpha(140),
+                        fontSize: 12,
+                      ),
+                    ),
+                  ),
                 const SizedBox(height: 16),
               ],
             ),
@@ -165,7 +190,8 @@ class Sidebar extends StatelessWidget {
         margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
         decoration: BoxDecoration(
-          color: isSelected ? AppColors.primary.withAlpha(25) : Colors.transparent,
+          color:
+              isSelected ? AppColors.primary.withAlpha(25) : Colors.transparent,
           borderRadius: BorderRadius.circular(8),
           border: isSelected
               ? Border.all(color: AppColors.primary.withAlpha(80), width: 1)
@@ -185,51 +211,6 @@ class Sidebar extends StatelessWidget {
                 color: isSelected ? AppColors.primary : AppColors.textPrimary,
                 fontSize: 14,
                 fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildRecentItem(BuildContext context, String name, String subtitle) {
-    return InkWell(
-      onTap: () {},
-      child: Container(
-        margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        child: Row(
-          children: [
-            Container(
-              width: 8,
-              height: 8,
-              decoration: const BoxDecoration(
-                color: AppColors.primary,
-                shape: BoxShape.circle,
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    name,
-                    style: const TextStyle(
-                      color: AppColors.textPrimary,
-                      fontSize: 13,
-                    ),
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  Text(
-                    subtitle,
-                    style: const TextStyle(
-                      color: AppColors.textSecondary,
-                      fontSize: 11,
-                    ),
-                  ),
-                ],
               ),
             ),
           ],
@@ -275,10 +256,140 @@ class Sidebar extends StatelessWidget {
             ),
           ),
           IconButton(
-            icon: const Icon(Icons.logout, color: AppColors.textSecondary, size: 18),
-            onPressed: () => context.go('/role'),
+            icon: const Icon(Icons.logout,
+                color: AppColors.textSecondary, size: 18),
+            onPressed: () {
+              context.read<AppProvider>().resetSession();
+              context.go('/role');
+            },
             padding: EdgeInsets.zero,
             constraints: const BoxConstraints(),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _RecentSessionsList extends StatefulWidget {
+  @override
+  State<_RecentSessionsList> createState() => _RecentSessionsListState();
+}
+
+class _RecentSessionsListState extends State<_RecentSessionsList> {
+  late Future<List<SessionHistoryRecord>> _future =
+      Future<List<SessionHistoryRecord>>.value(const []);
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _reload());
+  }
+
+  void _reload() {
+    if (!mounted) return;
+    final next = context
+        .read<AppProvider>()
+        .sessionHistoryService
+        .recentSessions(limit: 3);
+    setState(() {
+      _future = next;
+    });
+  }
+
+  static String _gbLine(SessionHistoryRecord r) {
+    const g = 1024 * 1024 * 1024;
+    final used = (r.bytesUsed / g).toStringAsFixed(1);
+    final total = (r.quotaBytes / g).toStringAsFixed(0);
+    return '$used GB / $total GB';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<List<SessionHistoryRecord>>(
+      future: _future,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Padding(
+            padding: EdgeInsets.all(24),
+            child: Center(
+              child: SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+            ),
+          );
+        }
+        final rows = snapshot.data ?? const <SessionHistoryRecord>[];
+        if (rows.isEmpty) {
+          return const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            child: Text(
+              'No sessions logged yet.',
+              style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
+            ),
+          );
+        }
+        return Column(
+          children: rows
+              .map((r) => InkWell(
+                    onTap: () => context.go('/guest/sessions'),
+                    child: _RecentRow(
+                      name: r.hostName.isEmpty ? 'Host' : r.hostName,
+                      subtitle: _gbLine(r),
+                    ),
+                  ))
+              .toList(),
+        );
+      },
+    );
+  }
+}
+
+class _RecentRow extends StatelessWidget {
+  final String name;
+  final String subtitle;
+
+  const _RecentRow({required this.name, required this.subtitle});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      child: Row(
+        children: [
+          Container(
+            width: 8,
+            height: 8,
+            decoration: const BoxDecoration(
+              color: AppColors.primary,
+              shape: BoxShape.circle,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  name,
+                  style: const TextStyle(
+                    color: AppColors.textPrimary,
+                    fontSize: 13,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+                Text(
+                  subtitle,
+                  style: const TextStyle(
+                    color: AppColors.textSecondary,
+                    fontSize: 11,
+                  ),
+                ),
+              ],
+            ),
           ),
         ],
       ),

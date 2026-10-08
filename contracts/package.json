@@ -1,0 +1,28 @@
+{
+  "name": "strata-contracts",
+  "version": "0.1.0",
+  "description": "STRATA Phase E - Solidity contracts (StrataToken + SessionEscrow) on Polygon Amoy.",
+  "private": true,
+  "license": "MIT",
+  "scripts": {
+    "build": "hardhat compile",
+    "test": "hardhat test",
+    "coverage": "hardhat coverage",
+    "deploy:amoy": "hardhat run scripts/deploy.ts --network amoy",
+    "verify:amoy": "hardhat run scripts/verify.ts --network amoy",
+    "demo:amoy": "hardhat run scripts/e2e_demo.ts --network amoy",
+    "demo:local": "hardhat run scripts/e2e_demo.ts --network hardhat",
+    "faucet:amoy": "hardhat run scripts/faucet.ts --network amoy"
+  },
+  "devDependencies": {
+    "@nomicfoundation/hardhat-toolbox": "^5.0.0",
+    "@nomicfoundation/hardhat-verify": "^2.0.10",
+    "@openzeppelin/contracts": "^5.0.2",
+    "@types/node": "^20.12.7",
+    "dotenv": "^16.4.5",
+    "hardhat": "^2.22.10",
+    "solidity-coverage": "^0.8.13",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.4.5"
+  }
+}

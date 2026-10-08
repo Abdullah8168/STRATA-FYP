@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:provider/provider.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/custom_button.dart';
 import '../../widgets/custom_text_field.dart';
-import '../../widgets/placeholder_map.dart';
+import '../../widgets/real_network_map.dart';
+import '../../providers/app_provider.dart';
+import '../../services/location_service.dart';
 
 class HostOnboardingScreen extends StatefulWidget {
   const HostOnboardingScreen({super.key});
@@ -15,8 +18,11 @@ class HostOnboardingScreen extends StatefulWidget {
 class _HostOnboardingScreenState extends State<HostOnboardingScreen> {
   final _ispController = TextEditingController(text: 'Comcast Business');
   final _ssidController = TextEditingController(text: 'STRATA-MyNode-01');
-  final _locationController = TextEditingController(text: '37.7749° N, 122.4194° W');
+  final _locationController =
+      TextEditingController(text: '37.7749° N, 122.4194° W');
   String _selectedPlan = '100 Mbps';
+  bool _detectingLocation = false;
+  final _locationService = const LocationService();
 
   final _plans = ['10 Mbps', '50 Mbps', '100 Mbps', '1 Gbps'];
 
@@ -30,6 +36,14 @@ class _HostOnboardingScreenState extends State<HostOnboardingScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final provider = context.watch<AppProvider>();
+    final hasLocation =
+        provider.currentLatitude != null && provider.currentLongitude != null;
+    final coords = hasLocation
+        ? '${provider.currentLatitude!.toStringAsFixed(5)}, '
+            '${provider.currentLongitude!.toStringAsFixed(5)}'
+        : _locationController.text;
+
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
@@ -90,14 +104,15 @@ class _HostOnboardingScreenState extends State<HostOnboardingScreen> {
               ),
               const SizedBox(height: 16),
               DropdownButtonFormField<String>(
-                value: _selectedPlan,
+                initialValue: _selectedPlan,
                 dropdownColor: AppColors.surface,
                 style: const TextStyle(color: AppColors.textPrimary),
                 decoration: InputDecoration(
                   labelText: 'Internet Plan Speed',
                   filled: true,
                   fillColor: AppColors.surface,
-                  prefixIcon: const Icon(Icons.speed_outlined, color: AppColors.textSecondary),
+                  prefixIcon: const Icon(Icons.speed_outlined,
+                      color: AppColors.textSecondary),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(10),
                     borderSide: const BorderSide(color: AppColors.divider),
@@ -122,8 +137,46 @@ class _HostOnboardingScreenState extends State<HostOnboardingScreen> {
                 readOnly: true,
                 prefixIcon: const Icon(Icons.location_on_outlined),
                 suffixIcon: IconButton(
-                  icon: const Icon(Icons.my_location, color: AppColors.primary),
-                  onPressed: () {},
+                  icon: _detectingLocation
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.my_location, color: AppColors.primary),
+                  onPressed: _detectingLocation
+                      ? null
+                      : () async {
+                          final provider = context.read<AppProvider>();
+                          final messenger = ScaffoldMessenger.of(context);
+                          setState(() => _detectingLocation = true);
+                          try {
+                            final position =
+                                await _locationService.getCurrentLocation();
+                            if (!mounted) return;
+                            final formatted =
+                                '${position.latitude.toStringAsFixed(5)}, '
+                                '${position.longitude.toStringAsFixed(5)}';
+                            _locationController.text = formatted;
+                            await provider.updateLocationAndNetworks(
+                              latitude: position.latitude,
+                              longitude: position.longitude,
+                              accuracyMeters: position.accuracy,
+                            );
+                          } catch (e) {
+                            if (!mounted) return;
+                            messenger.showSnackBar(
+                              SnackBar(
+                                  content: Text(e
+                                      .toString()
+                                      .replaceFirst('Exception: ', ''))),
+                            );
+                          } finally {
+                            if (mounted) {
+                              setState(() => _detectingLocation = false);
+                            }
+                          }
+                        },
                 ),
               ),
               const SizedBox(height: 24),
@@ -136,7 +189,18 @@ class _HostOnboardingScreenState extends State<HostOnboardingScreen> {
                 ),
               ),
               const SizedBox(height: 12),
-              const PlaceholderMap(height: 220),
+              RealNetworkMap(
+                height: 220,
+                userLatitude: provider.currentLatitude ?? 33.6844,
+                userLongitude: provider.currentLongitude ?? 73.0479,
+                networks: provider.detectedNetworks,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Detected coordinates: $coords',
+                style: const TextStyle(
+                    color: AppColors.textSecondary, fontSize: 12),
+              ),
               const SizedBox(height: 32),
               CustomButton(
                 label: 'Next: Configure Sharing',

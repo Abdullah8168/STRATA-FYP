@@ -1,0 +1,29 @@
+# STRATA dnsmasq template — DHCP (+ DNS forwarder) for the guest AP
+# Rendered by scripts/render_config.sh from host_node/ap/.env
+# Tokens use double-underscore names (see scripts/lib.sh).
+
+# Bind only to the AP interface so we do not fight the WAN DHCP client.
+interface=__AP_IFACE__
+bind-interfaces
+except-interface=lo
+
+# Do not read /etc/resolv.conf for upstream — use explicit servers.
+no-resolv
+server=__UPSTREAM_DNS_1__
+server=__UPSTREAM_DNS_2__
+# Ask both upstreams at once and use the first answer, so one blocked or
+# down resolver (e.g. a network that blocks public DNS) doesn't break guests.
+all-servers
+
+# Guest DHCP pool on 192.168.50.0/24 (gateway = Pi AP address).
+dhcp-range=__DHCP_RANGE_START__,__DHCP_RANGE_END__,__DHCP_LEASE__
+dhcp-option=option:router,__AP_ADDRESS__
+dhcp-option=option:dns-server,__AP_ADDRESS__
+
+# Keep DNS quiet and predictable for lab demos.
+domain-needed
+bogus-priv
+dhcp-authoritative
+
+# Log DHCP assignments to help verify clients (no secrets).
+log-dhcp

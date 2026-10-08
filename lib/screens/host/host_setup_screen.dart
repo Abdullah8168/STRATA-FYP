@@ -14,7 +14,7 @@ class HostSetupScreen extends StatefulWidget {
 
 class _HostSetupScreenState extends State<HostSetupScreen> {
   double _dataForSale = 50;
-  double _pricePerGB = 0.50;
+  double _pricePerGB = 150;
   double _maxUsers = 5;
 
   double get _estimatedEarnings => _dataForSale * _pricePerGB * 0.7;
@@ -83,13 +83,13 @@ class _HostSetupScreenState extends State<HostSetupScreen> {
               const SizedBox(height: 16),
               _buildSliderCard(
                 title: 'Price per GB',
-                value: '\$${_pricePerGB.toStringAsFixed(2)} STRATA',
+                value: 'Rs ${_pricePerGB.toStringAsFixed(2)}',
                 child: Slider(
                   value: _pricePerGB,
-                  min: 0.10,
-                  max: 5.00,
+                  min: 10,
+                  max: 500,
                   divisions: 49,
-                  label: '\$${_pricePerGB.toStringAsFixed(2)}',
+                  label: 'Rs ${_pricePerGB.toStringAsFixed(0)}',
                   onChanged: (v) => setState(() => _pricePerGB = v),
                 ),
               ),
@@ -224,7 +224,7 @@ class _HostSetupScreenState extends State<HostSetupScreen> {
             children: [
               _buildSummaryItem('${_dataForSale.toInt()} GB', 'For Sale'),
               const SizedBox(width: 16),
-              _buildSummaryItem('\$${_pricePerGB.toStringAsFixed(2)}', 'Per GB'),
+              _buildSummaryItem('Rs ${_pricePerGB.toStringAsFixed(0)}', 'Per GB'),
               const SizedBox(width: 16),
               _buildSummaryItem('${_maxUsers.toInt()}', 'Max Users'),
             ],

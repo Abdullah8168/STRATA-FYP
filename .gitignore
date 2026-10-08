@@ -30,3 +30,27 @@ macos/Flutter/GeneratedPluginRegistrant.swift
 *.swp
 *.swo
 .DS_Store
+
+# Secrets / local env
+.env
+**/.env
+!.env.example
+!**/.env.example
+!**/env.example
+
+# STRATA Pi AP — local secrets + rendered configs
+host_node/ap/.env
+host_node/ap/generated/
+
+# Host node / contracts local env (examples stay tracked)
+host_node/.env
+contracts/.env
+
+# Android release signing (never commit real keystores)
+android/key.properties
+*.jks
+*.keystore
+
+# Local Claude Code data and JVM crash logs
+.claude/
+hs_err_pid*.log

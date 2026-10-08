@@ -8,6 +8,14 @@ class HostModel {
   final int availableGB;
   final bool isActive;
 
+  /// EVM address (0x-prefixed) of the host's payout wallet.
+  /// LAN hosts populate this from `GET /host/info`; marketplace demo cards
+  /// may use placeholders until a real host is selected.
+  final String walletAddress;
+
+  /// Per-GB price in wei, sent as a string to preserve full uint256 range.
+  final String pricePerGbWei;
+
   const HostModel({
     required this.id,
     required this.name,
@@ -17,6 +25,8 @@ class HostModel {
     required this.distance,
     required this.availableGB,
     required this.isActive,
+    this.walletAddress = '0x0000000000000000000000000000000000000000',
+    this.pricePerGbWei = '1000000000000000',
   });
 
   factory HostModel.fromMap(Map<String, dynamic> map) {
@@ -29,6 +39,10 @@ class HostModel {
       distance: (map['distance'] as num).toDouble(),
       availableGB: map['availableGB'] as int,
       isActive: map['isActive'] as bool,
+      walletAddress: (map['walletAddress'] as String?) ??
+          '0x0000000000000000000000000000000000000000',
+      pricePerGbWei:
+          (map['pricePerGbWei'] as String?) ?? '1000000000000000',
     );
   }
 
@@ -42,6 +56,8 @@ class HostModel {
       'distance': distance,
       'availableGB': availableGB,
       'isActive': isActive,
+      'walletAddress': walletAddress,
+      'pricePerGbWei': pricePerGbWei,
     };
   }
 
@@ -54,6 +70,8 @@ class HostModel {
     double? distance,
     int? availableGB,
     bool? isActive,
+    String? walletAddress,
+    String? pricePerGbWei,
   }) {
     return HostModel(
       id: id ?? this.id,
@@ -64,6 +82,8 @@ class HostModel {
       distance: distance ?? this.distance,
       availableGB: availableGB ?? this.availableGB,
       isActive: isActive ?? this.isActive,
+      walletAddress: walletAddress ?? this.walletAddress,
+      pricePerGbWei: pricePerGbWei ?? this.pricePerGbWei,
     );
   }
 }

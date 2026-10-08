@@ -1,0 +1,50 @@
+name: firewall (fast)
+
+# Fast firewall tests only — render correctness, nft -c syntax check,
+# wireguard.conf rendering. Integration tests (netns, iperf3, real nft
+# load) require root + Linux + tools and are run manually on the Pi:
+#
+#   sudo pytest -q -m integration host_node/tests/firewall/integration
+#
+# This workflow is committed as a stub so the next phase can wire it up
+# to a real CI runner.
+
+on:
+  push:
+    paths:
+      - "host_node/src/strata_host/firewall/**"
+      - "host_node/src/strata_host/captive_portal/**"
+      - "host_node/src/strata_host/config.py"
+      - "host_node/tests/firewall/**"
+      - ".github/workflows/firewall.yml"
+  pull_request:
+    paths:
+      - "host_node/src/strata_host/firewall/**"
+      - "host_node/src/strata_host/captive_portal/**"
+      - "host_node/src/strata_host/config.py"
+      - "host_node/tests/firewall/**"
+      - ".github/workflows/firewall.yml"
+
+jobs:
+  fast-tests:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: host_node
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install nftables (for syntax-check test)
+        run: sudo apt-get update && sudo apt-get install -y nftables
+
+      - name: Install host node
+        run: pip install -e ".[dev]"
+
+      - name: Run fast tests
+        run: pytest -q -m "not integration" tests/firewall

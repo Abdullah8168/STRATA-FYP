@@ -1,10 +1,17 @@
+/// Identity record sourced from Firebase Auth (Phase B).
+///
+/// Phase D NOTE: this model is *only* an identity bag now. The on-chain
+/// wallet balance lives on [WalletModel] in `AppProvider._walletInfo`.
+/// The legacy `walletBalance` field is retained as zero for backward
+/// compatibility with older code paths and is not read by new screens.
 class UserModel {
   final String id;
   final String name;
   final String email;
   final String phone;
-  final String role; // 'host' or 'guest'
+  final String role;
   final double walletBalance;
+  final String dateOfBirth;
 
   const UserModel({
     required this.id,
@@ -12,7 +19,8 @@ class UserModel {
     required this.email,
     required this.phone,
     required this.role,
-    required this.walletBalance,
+    this.walletBalance = 0,
+    this.dateOfBirth = '',
   });
 
   factory UserModel.fromMap(Map<String, dynamic> map) {
@@ -22,7 +30,8 @@ class UserModel {
       email: map['email'] as String,
       phone: map['phone'] as String,
       role: map['role'] as String,
-      walletBalance: (map['walletBalance'] as num).toDouble(),
+      walletBalance: ((map['walletBalance'] as num?) ?? 0).toDouble(),
+      dateOfBirth: (map['dateOfBirth'] as String?) ?? '',
     );
   }
 
@@ -34,6 +43,7 @@ class UserModel {
       'phone': phone,
       'role': role,
       'walletBalance': walletBalance,
+      'dateOfBirth': dateOfBirth,
     };
   }
 
@@ -44,6 +54,7 @@ class UserModel {
     String? phone,
     String? role,
     double? walletBalance,
+    String? dateOfBirth,
   }) {
     return UserModel(
       id: id ?? this.id,
@@ -52,6 +63,7 @@ class UserModel {
       phone: phone ?? this.phone,
       role: role ?? this.role,
       walletBalance: walletBalance ?? this.walletBalance,
+      dateOfBirth: dateOfBirth ?? this.dateOfBirth,
     );
   }
 }

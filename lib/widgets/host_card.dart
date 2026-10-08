@@ -60,6 +60,18 @@ class HostCard extends StatelessWidget {
                             fontSize: 13,
                           ),
                         ),
+                        if (host.walletAddress.toLowerCase() ==
+                            '0x0000000000000000000000000000000000000000') ...[
+                          const SizedBox(height: 6),
+                          const Text(
+                            'Demo host wallet not configured — on-chain payment disabled.',
+                            style: TextStyle(
+                              color: Color(0xFFFFB300),
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
                       ],
                     ),
                   ),
@@ -92,7 +104,7 @@ class HostCard extends StatelessWidget {
                   const SizedBox(width: 8),
                   _buildStatChip(
                     Icons.token,
-                    '\$${host.pricePerGB.toStringAsFixed(2)}',
+                    'Rs ${host.pricePerGB.toStringAsFixed(2)}',
                     'Per GB',
                   ),
                   const Spacer(),

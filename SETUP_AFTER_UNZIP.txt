@@ -1,0 +1,35 @@
+STRATA - setup after unzipping
+==============================
+
+This zip contains only the source code. Folders that are generated
+automatically (or are specific to one computer) were left out to keep it
+small. Recreate them with these commands, run from the project folder:
+
+1) Flutter app (recreates .dart_tool/ and the packages)
+       flutter pub get
+   build/ and android/local.properties are created automatically the first
+   time you run:  flutter run   (or flutter build apk)
+
+2) Smart contracts (recreates contracts/node_modules/)
+       cd contracts
+       npm install
+
+3) Router / host node, only if you want to run its tests on this computer
+   (recreates host_node/.venv/)
+       cd host_node
+       python -m venv .venv
+       .venv\Scripts\python -m pip install -e . pytest pytest-asyncio pytest-mock httpx
+
+4) Config files (.env) are not included because they hold machine-specific
+   settings. Copy the examples if you need them:
+       host_node\.env.example  ->  host_node\.env
+       host_node\ap\env.example  ->  host_node\ap\.env
+
+The git history (.git) is not included either: unzip into a NEW folder,
+not on top of your existing project folder.
+
+To run the app on a laptop as a guest of the Pi:
+   Windows: run_guest_laptop.bat
+   Mac:     sh run_guest_laptop.sh   (run in Terminal from the project folder)
+
+To start the whole Pi demo (only on the laptop wired to the Pi): START_STRATA.bat

@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import '../../theme/app_theme.dart';
 import '../../providers/app_provider.dart';
+import '../../services/rating_service.dart';
 
 class SelectHostScreen extends StatelessWidget {
   const SelectHostScreen({super.key});
@@ -10,22 +11,50 @@ class SelectHostScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<AppProvider>();
-    final host = provider.selectedHost ?? provider.dummyHosts[0];
-
-    final dummyReviews = [
-      {
-        'user': 'Ali T.',
-        'rating': 5,
-        'comment': 'Excellent speed, very stable connection. Will use again!',
-        'time': '3 days ago',
-      },
-      {
-        'user': 'Priya S.',
-        'rating': 4,
-        'comment': 'Good value for money. Minor connection drops but overall fine.',
-        'time': '1 week ago',
-      },
-    ];
+    final host = provider.selectedHost;
+    if (host == null) {
+      return Scaffold(
+        backgroundColor: AppColors.background,
+        appBar: AppBar(
+          backgroundColor: AppColors.surface,
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back_ios, color: AppColors.textPrimary),
+            onPressed: () => context.go('/guest/nearby'),
+          ),
+          title: const Text('Host Details'),
+        ),
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.router_outlined, color: AppColors.textSecondary, size: 48),
+                const SizedBox(height: 12),
+                const Text(
+                  'No host selected',
+                  style: TextStyle(color: AppColors.textPrimary, fontSize: 18, fontWeight: FontWeight.w700),
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  'Please select a host from the nearby list.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: AppColors.textSecondary),
+                ),
+                const SizedBox(height: 16),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: () => context.go('/guest/nearby'),
+                    child: const Text('Go to Nearby Hosts'),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -117,7 +146,7 @@ class SelectHostScreen extends StatelessWidget {
                         children: [
                           _buildBadge(Icons.location_on, '${host.distance.toInt()}m away'),
                           _buildBadge(Icons.data_usage, '${host.availableGB} GB available'),
-                          _buildBadge(Icons.token, '\$${host.pricePerGB}/GB'),
+                          _buildBadge(Icons.token, 'Rs ${host.pricePerGB}/GB'),
                           _buildBadge(Icons.signal_wifi_4_bar, '45 Mbps'),
                         ],
                       ),
@@ -156,7 +185,38 @@ class SelectHostScreen extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 12),
-                ...dummyReviews.map((r) => _buildReview(r)),
+                StreamBuilder<List<Rating>>(
+                  stream: provider.ratingService.ratingsForHost(host.id),
+                  builder: (context, snap) {
+                    final live = snap.data ?? const [];
+                    if (snap.connectionState == ConnectionState.waiting &&
+                        live.isEmpty) {
+                      return const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 20),
+                        child: Center(
+                          child:
+                              SizedBox(width: 22, height: 22, child: CircularProgressIndicator()),
+                        ),
+                      );
+                    }
+                    if (live.isEmpty) {
+                      return const Padding(
+                        padding: EdgeInsets.only(bottom: 8),
+                        child: Text(
+                          'No reviews yet. Be the first after your session.',
+                          style: TextStyle(
+                            color: AppColors.textSecondary,
+                            fontSize: 13,
+                          ),
+                        ),
+                      );
+                    }
+                    return Column(
+                      children:
+                          live.map((r) => _buildFirestoreReview(r)).toList(),
+                    );
+                  },
+                ),
               ],
             ),
           ),
@@ -185,7 +245,7 @@ class SelectHostScreen extends StatelessWidget {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Text(
-                        'From \$${host.pricePerGB}/GB',
+                        'From Rs ${host.pricePerGB}/GB',
                         style: const TextStyle(
                           color: AppColors.primary,
                           fontSize: 18,
@@ -256,7 +316,7 @@ class SelectHostScreen extends StatelessWidget {
     return Container(width: 1, height: 30, color: AppColors.divider);
   }
 
-  Widget _buildReview(Map<String, dynamic> r) {
+  Widget _buildFirestoreReview(Rating r) {
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.all(14),
@@ -273,12 +333,18 @@ class SelectHostScreen extends StatelessWidget {
               CircleAvatar(
                 radius: 16,
                 backgroundColor: AppColors.primary.withAlpha(20),
-                child: const Icon(Icons.person, color: AppColors.primary, size: 16),
+                child: Text(
+                  r.userName.isNotEmpty
+                      ? r.userName[0].toUpperCase()
+                      : '?',
+                  style:
+                      const TextStyle(color: AppColors.primary, fontSize: 14),
+                ),
               ),
               const SizedBox(width: 10),
               Expanded(
                 child: Text(
-                  r['user'] as String,
+                  r.userName,
                   style: const TextStyle(
                     color: AppColors.textPrimary,
                     fontWeight: FontWeight.w600,
@@ -288,21 +354,29 @@ class SelectHostScreen extends StatelessWidget {
               ),
               Row(
                 children: List.generate(
-                  r['rating'] as int,
-                  (_) => const Icon(Icons.star, size: 14, color: Color(0xFFFFB300)),
+                  5,
+                  (i) => Icon(
+                    i < r.stars ? Icons.star : Icons.star_border,
+                    size: 14,
+                    color: const Color(0xFFFFB300),
+                  ),
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 8),
-          Text(
-            r['comment'] as String,
-            style: const TextStyle(color: AppColors.textSecondary, fontSize: 13, height: 1.4),
-          ),
+          if (r.comment.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Text(
+              r.comment,
+              style: const TextStyle(
+                  color: AppColors.textSecondary, fontSize: 13, height: 1.4),
+            ),
+          ],
           const SizedBox(height: 4),
           Text(
-            r['time'] as String,
-            style: const TextStyle(color: AppColors.textSecondary, fontSize: 11),
+            '${r.createdAt.year}-${r.createdAt.month.toString().padLeft(2, '0')}-${r.createdAt.day.toString().padLeft(2, '0')}',
+            style:
+                const TextStyle(color: AppColors.textSecondary, fontSize: 11),
           ),
         ],
       ),

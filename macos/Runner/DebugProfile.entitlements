@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>com.apple.security.app-sandbox</key>
+	<true/>
+	<key>com.apple.security.cs.allow-jit</key>
+	<true/>
+	<key>com.apple.security.network.server</key>
+	<true/>
+	<!-- Phase D: network client lets the app talk to the Polygon Amoy RPC,
+	     EmailJS, and the local STRATA host node. -->
+	<key>com.apple.security.network.client</key>
+	<true/>
+	<!-- Phase D: flutter_secure_storage needs Keychain access for the wallet
+	     mnemonic. Sandboxed macOS apps must declare a keychain-access-groups
+	     entry; the bundle identifier is fine as the only group. -->
+	<key>keychain-access-groups</key>
+	<array>
+		<string>$(AppIdentifierPrefix)com.example.strata</string>
+	</array>
+</dict>
+</plist>

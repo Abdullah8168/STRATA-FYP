@@ -3,7 +3,9 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/sidebar.dart';
+import '../../widgets/account_menu_button.dart';
 import '../../providers/app_provider.dart';
+import '../../services/host_api_service.dart';
 
 class HostDashboardScreen extends StatefulWidget {
   const HostDashboardScreen({super.key});
@@ -13,12 +15,100 @@ class HostDashboardScreen extends StatefulWidget {
 }
 
 class _HostDashboardScreenState extends State<HostDashboardScreen> {
-  final List<Map<String, String>> _transactions = [
-    {'user': "Sara G.", 'amount': '+2.50', 'data': '5 GB', 'time': '2 min ago'},
-    {'user': "Ahmed K.", 'amount': '+1.00', 'data': '2 GB', 'time': '18 min ago'},
-    {'user': "Campus User", 'amount': '+5.00', 'data': '10 GB', 'time': '1 hr ago'},
-    {'user': "Maria L.", 'amount': '+0.50', 'data': '1 GB', 'time': '3 hrs ago'},
-  ];
+  List<Map<String, dynamic>> _sessions = const [];
+  String? _loadError;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _load());
+  }
+
+  Future<void> _load() async {
+    final api = context.read<AppProvider>().hostApiService;
+    try {
+      final rows = await api.fetchHostSessions();
+      if (!mounted) return;
+      setState(() {
+        _sessions = rows;
+        _loadError = null;
+      });
+    } on HostApiException catch (e) {
+      if (!mounted) return;
+      setState(() => _loadError = e.message);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _loadError = e.toString());
+    }
+  }
+
+  String _shortWallet(String w) {
+    if (w.length < 12) return w;
+    return '${w.substring(0, 6)}…${w.substring(w.length - 4)}';
+  }
+
+  String _relativeTime(String? iso) {
+    if (iso == null) return '';
+    final t = DateTime.tryParse(iso);
+    if (t == null) return '';
+    final diff = DateTime.now().difference(t.toLocal());
+    if (diff.inMinutes < 1) return 'just now';
+    if (diff.inHours < 1) return '${diff.inMinutes} min ago';
+    if (diff.inHours < 24) return '${diff.inHours} hr ago';
+    return '${diff.inDays} d ago';
+  }
+
+  double _strtDisplay(String weiStr) {
+    final v = BigInt.tryParse(weiStr) ?? BigInt.zero;
+    return v.toDouble() / 1e18;
+  }
+
+  int _activeCount() =>
+      _sessions.where((s) => (s['status'] as String?) == 'active').length;
+
+  int _bytesToday() {
+    final now = DateTime.now();
+    var sum = 0;
+    for (final s in _sessions) {
+      final iso = s['started_at'] as String?;
+      final st = iso == null ? null : DateTime.tryParse(iso);
+      if (st == null) continue;
+      if (st.year != now.year || st.month != now.month || st.day != now.day) {
+        continue;
+      }
+      sum += (s['bytes_used'] as num?)?.toInt() ?? 0;
+    }
+    return sum;
+  }
+
+  double _earningsTodayStrt() {
+    var sum = 0.0;
+    final now = DateTime.now();
+    for (final s in _sessions) {
+      final iso = s['started_at'] as String?;
+      final st = iso == null ? null : DateTime.tryParse(iso);
+      if (st == null) continue;
+      if (st.year != now.year || st.month != now.month || st.day != now.day) {
+        continue;
+      }
+      final w = (s['earned_amount_wei'] as String?) ??
+          (s['strt_amount_wei'] as String?) ??
+          '0';
+      sum += _strtDisplay(w);
+    }
+    return sum;
+  }
+
+  double _earningsTotalStrt() {
+    var sum = 0.0;
+    for (final s in _sessions) {
+      final w = (s['earned_amount_wei'] as String?) ??
+          (s['strt_amount_wei'] as String?) ??
+          '0';
+      sum += _strtDisplay(w);
+    }
+    return sum;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -42,6 +132,10 @@ class _HostDashboardScreenState extends State<HostDashboardScreen> {
                 ),
           title: const Text('Host Dashboard'),
           actions: [
+            IconButton(
+              icon: const Icon(Icons.refresh, color: AppColors.textPrimary),
+              onPressed: _load,
+            ),
             Stack(
               children: [
                 IconButton(
@@ -62,6 +156,7 @@ class _HostDashboardScreenState extends State<HostDashboardScreen> {
                 ),
               ],
             ),
+            const AccountMenuButton(),
           ],
         ),
         body: Row(
@@ -75,7 +170,15 @@ class _HostDashboardScreenState extends State<HostDashboardScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     _buildToggleCard(isActive, provider),
-                    const SizedBox(height: 20),
+                    const SizedBox(height: 10),
+                    if (_loadError != null)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: Text(
+                          _loadError!,
+                          style: const TextStyle(color: AppColors.error, fontSize: 12),
+                        ),
+                      ),
                     _buildStatsRow(),
                     const SizedBox(height: 20),
                     _buildChartCard(),
@@ -165,10 +268,16 @@ class _HostDashboardScreenState extends State<HostDashboardScreen> {
                 provider.deactivateHostSharing();
               }
             },
-            activeColor: AppColors.primary,
-            activeTrackColor: AppColors.primary.withAlpha(50),
-            inactiveThumbColor: AppColors.textSecondary,
-            inactiveTrackColor: AppColors.divider,
+            thumbColor: WidgetStateProperty.resolveWith(
+              (states) => states.contains(WidgetState.selected)
+                  ? AppColors.primary
+                  : AppColors.textSecondary,
+            ),
+            trackColor: WidgetStateProperty.resolveWith(
+              (states) => states.contains(WidgetState.selected)
+                  ? AppColors.primary.withAlpha(50)
+                  : AppColors.divider,
+            ),
           ),
         ],
       ),
@@ -176,11 +285,32 @@ class _HostDashboardScreenState extends State<HostDashboardScreen> {
   }
 
   Widget _buildStatsRow() {
+    final gbToday = _bytesToday() / (1024 * 1024 * 1024);
     final stats = [
-      {'label': "Today's Earnings", 'value': '8.50', 'unit': 'STRATA', 'icon': Icons.attach_money},
-      {'label': 'Total Earnings', 'value': '142.30', 'unit': 'STRATA', 'icon': Icons.account_balance_wallet_outlined},
-      {'label': 'Active Users', 'value': '3', 'unit': 'guests', 'icon': Icons.people_outline},
-      {'label': 'Data Shared', 'value': '17', 'unit': 'GB today', 'icon': Icons.data_usage},
+      {
+        'label': "Today's Earnings",
+        'value': _earningsTodayStrt().toStringAsFixed(2),
+        'unit': 'STRATA',
+        'icon': Icons.attach_money,
+      },
+      {
+        'label': 'Total Earnings',
+        'value': _earningsTotalStrt().toStringAsFixed(2),
+        'unit': 'STRATA',
+        'icon': Icons.account_balance_wallet_outlined,
+      },
+      {
+        'label': 'Active Users',
+        'value': '${_activeCount()}',
+        'unit': 'guests',
+        'icon': Icons.people_outline,
+      },
+      {
+        'label': 'Data Shared',
+        'value': gbToday.toStringAsFixed(2),
+        'unit': 'GB today',
+        'icon': Icons.data_usage,
+      },
     ];
     return GridView.builder(
       shrinkWrap: true,
@@ -278,11 +408,19 @@ class _HostDashboardScreenState extends State<HostDashboardScreen> {
   }
 
   Widget _buildTransactions() {
+    final rows = [..._sessions]
+      ..sort((a, b) {
+        final ta = DateTime.tryParse((a['started_at'] as String?) ?? '') ??
+            DateTime.fromMillisecondsSinceEpoch(0);
+        final tb = DateTime.tryParse((b['started_at'] as String?) ?? '') ??
+            DateTime.fromMillisecondsSinceEpoch(0);
+        return tb.compareTo(ta);
+      });
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const Text(
-          'Recent Transactions',
+          'Recent Sessions',
           style: TextStyle(
             color: AppColors.textPrimary,
             fontSize: 16,
@@ -290,12 +428,24 @@ class _HostDashboardScreenState extends State<HostDashboardScreen> {
           ),
         ),
         const SizedBox(height: 12),
-        ..._transactions.map((t) => _buildTransactionItem(t)),
+        if (rows.isEmpty)
+          const Text(
+            'No sessions yet.',
+            style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
+          )
+        else
+          ...rows.take(12).map((t) => _buildTransactionItem(t)),
       ],
     );
   }
 
-  Widget _buildTransactionItem(Map<String, String> t) {
+  Widget _buildTransactionItem(Map<String, dynamic> t) {
+    final wallet = (t['guest_wallet_address'] as String?) ?? '';
+    final used = (t['bytes_used'] as num?)?.toInt() ?? 0;
+    final gb = used / (1024 * 1024 * 1024);
+    final wei = (t['strt_amount_wei'] as String?) ?? '0';
+    final amount = _strtDisplay(wei).toStringAsFixed(3);
+    final started = t['started_at'] as String?;
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.all(14),
@@ -317,7 +467,7 @@ class _HostDashboardScreenState extends State<HostDashboardScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  t['user']!,
+                  _shortWallet(wallet),
                   style: const TextStyle(
                     color: AppColors.textPrimary,
                     fontSize: 14,
@@ -325,14 +475,14 @@ class _HostDashboardScreenState extends State<HostDashboardScreen> {
                   ),
                 ),
                 Text(
-                  '${t['data']} · ${t['time']}',
+                  '${gb.toStringAsFixed(2)} GB · ${_relativeTime(started)} · ${t['status']}',
                   style: const TextStyle(color: AppColors.textSecondary, fontSize: 12),
                 ),
               ],
             ),
           ),
           Text(
-            '${t['amount']} STRATA',
+            '+$amount STRATA',
             style: const TextStyle(
               color: AppColors.primary,
               fontSize: 14,

@@ -1,0 +1,30 @@
+name: ap-check
+
+# Iteration 1 — validate STRATA Pi AP templates and scripts without hardware.
+# Does not bring up a radio. Full AP bring-up is manual on a Raspberry Pi:
+#
+#   just ap-setup && just ap-verify
+
+on:
+  push:
+    paths:
+      - "host_node/ap/**"
+      - ".github/workflows/ap-check.yml"
+      - "justfile"
+  pull_request:
+    paths:
+      - "host_node/ap/**"
+      - ".github/workflows/ap-check.yml"
+      - "justfile"
+
+jobs:
+  offline-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dnsmasq (for --test)
+        run: sudo apt-get update && sudo apt-get install -y dnsmasq
+
+      - name: AP template + script check
+        run: bash host_node/ap/scripts/check_ap.sh

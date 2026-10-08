@@ -1,0 +1,20 @@
+node_modules/
+artifacts/
+cache/
+coverage/
+coverage.json
+typechain-types/
+dist/
+.env
+.env.*
+!.env.example
+
+# We intentionally KEEP deployments/ checked in so the team shares one
+# source of truth for testnet addresses (Hardhat templates default to
+# ignoring it).
+!deployments/
+deployments/localhost.json
+
+# ABI artifacts produced by deploy.ts are checked in so downstream
+# consumers (Flutter, Python) can read them without rebuilding.
+!abi/

@@ -49,7 +49,50 @@ class _ChooseQuotaScreenState extends State<ChooseQuotaScreen> {
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<AppProvider>();
-    final host = provider.selectedHost ?? provider.dummyHosts[0];
+    final host = provider.selectedHost;
+    if (host == null) {
+      return Scaffold(
+        backgroundColor: AppColors.background,
+        appBar: AppBar(
+          backgroundColor: Colors.transparent,
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back_ios, color: AppColors.textPrimary),
+            onPressed: () => context.go('/guest/nearby'),
+          ),
+          title: const Text('Choose Data Package'),
+        ),
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.data_usage_outlined, color: AppColors.textSecondary, size: 48),
+                const SizedBox(height: 12),
+                const Text(
+                  'Select a host first',
+                  style: TextStyle(color: AppColors.textPrimary, fontSize: 18, fontWeight: FontWeight.w700),
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  'Packages and pricing depend on the host you choose.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: AppColors.textSecondary),
+                ),
+                const SizedBox(height: 16),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: () => context.go('/guest/nearby'),
+                    child: const Text('Go to Nearby Hosts'),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
     final price = host.pricePerGB;
 
     return Scaffold(
@@ -95,7 +138,7 @@ class _ChooseQuotaScreenState extends State<ChooseQuotaScreen> {
                                   ),
                                 ),
                                 Text(
-                                  '\$${price.toStringAsFixed(2)} per GB',
+                                  'Rs ${price.toStringAsFixed(2)} per GB',
                                   style: const TextStyle(
                                     color: AppColors.primary,
                                     fontSize: 13,
@@ -216,7 +259,7 @@ class _ChooseQuotaScreenState extends State<ChooseQuotaScreen> {
                                 ),
                               ),
                               Text(
-                                '\$$total',
+                                'Rs $total',
                                 style: const TextStyle(
                                   color: AppColors.textPrimary,
                                   fontSize: 16,
@@ -321,7 +364,7 @@ class _ChooseQuotaScreenState extends State<ChooseQuotaScreen> {
                           ),
                         ),
                         Text(
-                          '\$${_totalPrice(price).toStringAsFixed(2)} STRATA',
+                          'Rs ${_totalPrice(price).toStringAsFixed(2)}',
                           style: const TextStyle(
                             color: AppColors.primary,
                             fontSize: 20,
